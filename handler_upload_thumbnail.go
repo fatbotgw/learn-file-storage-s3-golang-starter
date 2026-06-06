@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"encoding/base64"
+	"os"
+	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -49,12 +50,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	fileType := header.Header.Get("Content-Type")
 
-	image, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't read image", err)
-		return
-	}
-
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "Video not found", err)
@@ -65,12 +60,28 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	imageString := base64.StdEncoding.EncodeToString(image)
-
 	// format:
-	// data:<media-type>;base64,<data>
-	newUrl := fmt.Sprintf("data:%v;base64,%v", fileType, imageString)
+	// http://localhost:<port>/assets/<videoID>.<file_extension>
+	fileExtension := ""
+	if fileType == "image/png" {
+		fileExtension = "png"
+	} else if fileType == "video/mp4" {
+		fileExtension = "mp4"
+	} else {
+		respondWithError(w, http.StatusUnsupportedMediaType, "Media type not png or mp4", nil)
+		return
+	}
 
+	newUrl := filepath.Join(cfg.assetsRoot, videoID.String() + "." + fileExtension)
+	fileOnDisk, err := os.Create(newUrl)
+	if err != nil {
+		respondWithError(w, http.StatusForbidden, "Unable to create file on disk", err)
+		return
+	}
+	_, err = io.Copy(fileOnDisk, file)
+
+	// add a preceding '/' so that the browser can properly load the file
+	newUrl = "/" + newUrl
 	video.ThumbnailURL = &newUrl
 
 	err = cfg.db.UpdateVideo(video)
