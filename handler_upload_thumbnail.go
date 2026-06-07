@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -48,7 +48,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	fileType := header.Header.Get("Content-Type")
+
+	fileType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", err)
+		return
+	}
+	if fileType != "image/png" && fileType != "video/mp4" {
+		respondWithError(w, http.StatusUnsupportedMediaType, "Media type not png or mp4", nil)
+		return
+	}
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -62,27 +71,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	// format:
 	// http://localhost:<port>/assets/<videoID>.<file_extension>
-	fileExtension := ""
-	if fileType == "image/png" {
-		fileExtension = "png"
-	} else if fileType == "video/mp4" {
-		fileExtension = "mp4"
-	} else {
-		respondWithError(w, http.StatusUnsupportedMediaType, "Media type not png or mp4", nil)
-		return
-	}
+	
+	assetPath := getAssetPath(videoID, fileType)
+	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
-	newUrl := filepath.Join(cfg.assetsRoot, videoID.String() + "." + fileExtension)
-	fileOnDisk, err := os.Create(newUrl)
+
+	fileOnDisk, err := os.Create(assetDiskPath)
 	if err != nil {
 		respondWithError(w, http.StatusForbidden, "Unable to create file on disk", err)
 		return
 	}
 	_, err = io.Copy(fileOnDisk, file)
-
-	// add a preceding '/' so that the browser can properly load the file
-	newUrl = "/" + newUrl
-	video.ThumbnailURL = &newUrl
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
