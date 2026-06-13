@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -72,7 +74,12 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	// format:
 	// http://localhost:<port>/assets/<videoID>.<file_extension>
 	
-	assetPath := getAssetPath(videoID, fileType)
+	pathKey := make([]byte, 32)
+	rand.Read(pathKey)
+	thumbnailID := make([]byte, base64.RawURLEncoding.EncodedLen(len(pathKey)))
+	base64.RawURLEncoding.Encode(thumbnailID, pathKey)
+
+	assetPath := getAssetPath2(string(thumbnailID), fileType)
 	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
 
@@ -82,7 +89,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	_, err = io.Copy(fileOnDisk, file)
-	thumbnailURL := fmt.Sprintf("http://localhost:%v/assets/%v", cfg.port, assetPath)
+	thumbnailURL := cfg.getAssetURL(assetPath)
+	// thumbnailURL := fmt.Sprintf("http://localhost:%v/assets/%v", cfg.port, assetPath)
 	video.ThumbnailURL = &thumbnailURL
 
 	err = cfg.db.UpdateVideo(video)

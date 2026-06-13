@@ -21,6 +21,11 @@ func getAssetPath(videoID uuid.UUID, mediaType string) string {
 	return fmt.Sprintf("%s%s", videoID, ext)
 }
 
+func getAssetPath2(thumbnailID string, mediaType string) string {
+	ext := mediaTypeToExt(mediaType)
+	return fmt.Sprintf("%s%s", thumbnailID, ext)
+}
+
 func (cfg apiConfig) getAssetDiskPath(assetPath string) string {
 	return filepath.Join(cfg.assetsRoot, assetPath)
 }
