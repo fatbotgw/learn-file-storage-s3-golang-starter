@@ -84,9 +84,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, err = io.Copy(fileOnDisk, file)
 	fileOnDisk.Seek(0, io.SeekStart)
 
+	videoForm := "other"
+	aspectRatio, err := getVideoAspectRatio(fileOnDisk.Name())
+	if aspectRatio == "16:9" {
+		// landscape
+		videoForm = "landscape"
+	} else if aspectRatio == "9:16" {
+		// portrait
+		videoForm = "portrait"
+	}
+
 	pathKey := make([]byte, 32)
 	rand.Read(pathKey)
-	videoKey := hex.EncodeToString(pathKey)
+	videoKey := videoForm + "/" + hex.EncodeToString(pathKey)
 
 	s3Struct := s3.PutObjectInput{
 		Bucket: &cfg.s3Bucket,
@@ -137,14 +147,16 @@ func getVideoAspectRatio(filePath string) (string, error) {
     width  := outputData.Streams[0].Width
 
     // strings to return "16:9", "9:16", or "other"
-    if width * 9 == height * 16 {
+    ratio := width * 9 / height
+    if ratio == 16 || ratio == 15 {
     	// is horizontal
     	return "16:9", nil
-    } else if width * 16 == height * 9 {
+    } 
+    ratio = height * 9 / width
+    if ratio == 16 || ratio == 15 {
     	// is vertical
     	return "9:16", nil
-    } else {
-    	// is other
-    	return "other", nil
     }
+	// is other
+	return "other", nil
 }
