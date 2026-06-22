@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -106,4 +109,42 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, video)
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	type output struct {
+		Streams []struct {
+			Width	int `json:"width"`
+			Height	int `json:"height"`
+		} `json:"streams"`
+	}
+
+	// ffprobe -v error -print_format json -show_streams PATH_TO_VIDEO
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	var outputData output
+    if err := json.Unmarshal(out.Bytes(), &outputData); err != nil {
+        return "", err
+    }
+
+    height := outputData.Streams[0].Height
+    width  := outputData.Streams[0].Width
+
+    // strings to return "16:9", "9:16", or "other"
+    if width * 9 == height * 16 {
+    	// is horizontal
+    	return "16:9", nil
+    } else if width * 16 == height * 9 {
+    	// is vertical
+    	return "9:16", nil
+    } else {
+    	// is other
+    	return "other", nil
+    }
 }
