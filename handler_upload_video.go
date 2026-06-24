@@ -94,6 +94,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		videoForm = "portrait"
 	}
 
+	processedFileName, err := processVideoForFastStart(fileOnDisk.Name())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error converting video", err)
+		return
+	}
+	processedFile, err := os.Open(processedFileName)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't open file", err)
+		return
+	}
+	defer os.Remove(processedFileName)
+	defer processedFile.Close()
+
 	pathKey := make([]byte, 32)
 	rand.Read(pathKey)
 	videoKey := videoForm + "/" + hex.EncodeToString(pathKey)
@@ -101,7 +114,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	s3Struct := s3.PutObjectInput{
 		Bucket: &cfg.s3Bucket,
 		Key:	&videoKey,
-		Body: fileOnDisk,
+		Body: processedFile,
 		ContentType: &fileType,
 	}
 
