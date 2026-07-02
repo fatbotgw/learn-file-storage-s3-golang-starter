@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,12 +11,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"time"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -125,21 +122,14 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	// Format:
 	// https://<bucket-name>.s3.<region>.amazonaws.com/<key>
+	// <distribution-domain>.cloudfront.net
 	// videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, videoKey)
-	// Format:
-	// tube-private-12345,portrait/vertical.mp4
-	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, videoKey)
+	videoURL := fmt.Sprintf("https://%s.cloudfront.net/%s", cfg.s3CfDistribution, videoKey)
 	video.VideoURL = &videoURL
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Error updating video", err)
-		return
-	}
-
-	video, err = cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Error signing video", err)
 		return
 	}
 
@@ -203,20 +193,3 @@ func processVideoForFastStart(filePath string) (string, error) {
 
 	return outputPath, nil
 }
-
-func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
-	preSignClient := s3.NewPresignClient(s3Client)
-
-	ctx := context.TODO()
-	preSignObject, err := preSignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:	aws.String(key),
-	}, s3.WithPresignExpires(expireTime))
-	
-	if err != nil {
-		return "", err
-	}
-
-	return preSignObject.URL, nil
-}
-
